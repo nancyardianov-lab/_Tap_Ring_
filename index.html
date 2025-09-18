@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tap Ring</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root {
+      --azul: #1e3a8a;
+      --amarillo: #fbbf24;
+      --gris: #e5e7eb;
+      --blanco: #ffffff;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--gris);
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      width: 100%;
+      background: var(--azul);
+      color: var(--blanco);
+      padding: 15px;
+      text-align: center;
+      font-size: 1.5em;
+      font-weight: bold;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
+    main {
+      padding: 20px;
+      width: 100%;
+      max-width: 900px;
+    }
+    #reloj {
+      font-size: 2.5em;
+      margin: 20px 0;
+      color: var(--azul);
+      font-weight: bold;
+      text-align: center;
+    }
+    form {
+      background: var(--blanco);
+      padding: 15px;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    form input, form button, form select {
+      padding: 10px;
+      margin: 5px;
+      border-radius: 8px;
+      border: 1px solid var(--gris);
+      font-size: 1em;
+    }
+    form input[type="time"] {
+      width: 40%;
+    }
+    form button {
+      background: var(--amarillo);
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    form button:hover {
+      background: #f59e0b;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      background: var(--blanco);
+      margin: 8px 0;
+      padding: 12px 15px;
+      border-radius: 12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.95em;
+      color: var(--azul);
+    }
+    .info {
+      flex: 1;
+      text-align: left;
+    }
+    .eliminar {
+      background: #ef4444;
+      border: none;
+      color: var(--blanco);
+      padding: 6px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.8em;
+      transition: background 0.3s;
+    }
+    .eliminar:hover {
+      background: #dc2626;
+    }
+    #alerta {
+      margin-top: 20px;
+      font-size: 1.2em;
+      font-weight: bold;
+      color: var(--azul);
+      text-align: center;
+    }
+    #stopBtn {
+      display: none;
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 1em;
+      background: #6b7280;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #stopBtn:hover {
+      background: #4b5563;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 30px;
+      background: var(--blanco);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    th, td {
+      border: 1px solid var(--gris);
+      padding: 10px;
+      text-align: center;
+      font-size: 0.9em;
+    }
+    th {
+      background: var(--azul);
+      color: var(--blanco);
+    }
+    td {
+      min-height: 60px;
+    }
+  </style>
+</head>
+<body>
+  <header>🔔 Tap Ring</header>
+
+  <main>
+    <div id="reloj">00:00:00</div>
+
+    <form id="form-horario">
+      <select id="dia" required>
+        <option value="">Día</option>
+        <option>Lunes</option>
+        <option>Martes</option>
+        <option>Miércoles</option>
+        <option>Jueves</option>
+        <option>Viernes</option>
+      </select>
+      <input type="time" id="inicio" required>
+      <input type="time" id="fin" required><br>
+      <input type="text" id="seccion" placeholder="Sección / Carrera" required>
+      <input type="text" id="materia" placeholder="Materia" required><br>
+      <button type="submit">➕ Agregar</button>
+    </form>
+
+    <ul id="lista"></ul>
+    <div id="alerta"></div>
+    <button id="stopBtn">Detener timbre</button>
+
+    <h2>📅 Calendario Semanal</h2>
+    <table id="calendario">
+      <thead>
+        <tr>
+          <th>Hora</th>
+          <th>Lunes</th>
+          <th>Martes</th>
+          <th>Miércoles</th>
+          <th>Jueves</th>
+          <th>Viernes</th>
+        </tr>
+      </thead>
+      <tbody id="calendario-body"></tbody>
+    </table>
+  </main>
+
+  <audio id="sonido" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
+  <script>
+    const lista = document.getElementById("lista");
+    const alertaDiv = document.getElementById("alerta");
+    const relojDiv = document.getElementById("reloj");
+    const sonido = document.getElementById("sonido");
+    const stopBtn = document.getElementById("stopBtn");
+    const calendarioBody = document.getElementById("calendario-body");
+
+    let periodos = JSON.parse(localStorage.getItem("periodos")) || [];
+    periodos.forEach(p => {
+      if (p.notifiedBefore === undefined) p.notifiedBefore = false;
+      if (p.notifiedEnd === undefined) p.notifiedEnd = false;
+    });
+
+    let sonidoInterval;
+    let sonidoTimeout;
+
+    document.body.addEventListener("click", () => {
+      sonido.play().then(()=> sonido.pause()).catch(()=>{});
+    });
+
+    function actualizarReloj() {
+      const ahora = new Date();
+      const h = ahora.getHours().toString().padStart(2,"0");
+      const m = ahora.getMinutes().toString().padStart(2,"0");
+      const s = ahora.getSeconds().toString().padStart(2,"0");
+      relojDiv.textContent = `${h}:${m}:${s}`;
+      verificarPeriodos(ahora);
+    }
+
+    function verificarPeriodos(ahora) {
+      alertaDiv.textContent = "";
+      let cambios = false;
+
+      const diasSemana = {
+        "Domingo": 0,
+        "Lunes": 1,
+        "Martes": 2,
+        "Miércoles": 3,
+        "Jueves": 4,
+        "Viernes": 5,
+        "Sábado": 6
+      };
+
+      for (let p of periodos) {
+        const diaPeriodo = diasSemana[p.dia];
+        const diaHoy = ahora.getDay();
+
+        if (diaPeriodo !== diaHoy) continue;
+
+        const [hi, mi] = p.inicio.split(":").map(Number);
+        const [hf, mf] = p.fin.split(":").map(Number);
+
+        const inicio = new Date(ahora);
+        inicio.setHours(hi, mi, 0, 0);
+        const fin = new Date(ahora);
+        fin.setHours(hf, mf, 0, 0);
+
+        const restante = (fin - ahora) / 1000;
+
+        // ⚠️ Notificación 5 minutos antes de que termine la clase
+        if (restante <= 300 && restante > 295 && !p.notifiedBefore) {
+          p.notifiedBefore = true;
+          cambios = true;
+          alerta(`⚠️ Quedan 5 minutos para que termine ${p.materia} (${p.seccion})`);
+        }
+
+        // 🔔 Notificación al finalizar
+        if (restante <= 1 && !p.notifiedEnd) {
+          p.notifiedEnd = true;
+          cambios = true;
+          alerta(`🔔 Fin del período de ${p.materia} (${p.seccion})`);
+        }
+      }
+
+      if (cambios) {
+        localStorage.setItem("periodos", JSON.stringify(periodos));
+      }
+    }
+
+    function alerta(mensaje) {
+      alertaDiv.textContent = mensaje;
+
+      clearInterval(sonidoInterval);
+      clearTimeout(sonidoTimeout);
+
+      sonido.currentTime = 0;
+      sonido.play();
+      sonidoInterval = setInterval(() => {
+        sonido.currentTime = 0;
+        sonido.play();
+      }, 2000);
+
+      stopBtn.style.display = "block";
+
+      sonidoTimeout = setTimeout(() => {
+        clearInterval(sonidoInterval);
+        sonido.pause();
+        sonido.currentTime = 0;
+        stopBtn.style.display = "none";
+      }, 30000);
+
+      if (Notification.permission === "granted") {
+        navigator.serviceWorker.getRegistration().then(reg => {
+          if (reg) {
+            reg.showNotification("Tap Ring", {
+              body: mensaje,
+              icon: "https://cdn-icons-png.flaticon.com/512/1827/1827370.png",
+              vibrate: [200, 100, 200]
+            });
+          } else {
+            new Notification("Tap Ring", {
+              body: mensaje,
+              icon: "https://cdn-icons-png.flaticon.com/512/1827/1827370.png"
+            });
+          }
+        });
+      }
+    }
+
+    stopBtn.onclick = () => {
+      clearInterval(sonidoInterval);
+      clearTimeout(sonidoTimeout);
+      sonido.pause();
+      sonido.currentTime = 0;
+      stopBtn.style.display = "none";
+    };
+
+    function renderLista() {
+      lista.innerHTML = "";
+      periodos.forEach((p, i) => {
+        const li = document.createElement("li");
+        const info = document.createElement("div");
+        info.className = "info";
+        info.innerHTML = `<strong>${p.materia}</strong> (${p.seccion})<br>${p.dia} ⏰ ${p.inicio} - ${p.fin}`;
+        const btn = document.createElement("button");
+        btn.textContent = "X";
+        btn.className = "eliminar";
+        btn.onclick = () => {
+          periodos.splice(i, 1);
+          localStorage.setItem("periodos", JSON.stringify(periodos));
+          renderLista();
+          renderCalendario();
+        };
+        li.appendChild(info);
+        li.appendChild(btn);
+        lista.appendChild(li);
+      });
+    }
+
+    function renderCalendario() {
+      const horas = [...new Set(periodos.map(p => p.inicio).concat(periodos.map(p => p.fin)))].sort();
+      calendarioBody.innerHTML = "";
+
+      horas.forEach(hora => {
+        const fila = document.createElement("tr");
+        const celHora = document.createElement("td");
+        celHora.textContent = hora;
+        fila.appendChild(celHora);
+
+        ["Lunes","Martes","Miércoles","Jueves","Viernes"].forEach(dia => {
+          const cel = document.createElement("td");
+          const clase = periodos.find(p => p.dia === dia && p.inicio === hora);
+          if (clase) {
+            cel.innerHTML = `<strong>${clase.materia}</strong><br>${clase.seccion}<br>${clase.inicio}-${clase.fin}`;
+          }
+          fila.appendChild(cel);
+        });
+
+        calendarioBody.appendChild(fila);
+      });
+    }
+
+    document.getElementById("form-horario").addEventListener("submit", e => {
+      e.preventDefault();
+      const dia = document.getElementById("dia").value;
+      const inicio = document.getElementById("inicio").value;
+      const fin = document.getElementById("fin").value;
+      const seccion = document.getElementById("seccion").value;
+      const materia = document.getElementById("materia").value;
+
+      const nuevo = {dia, inicio, fin, seccion, materia, notifiedBefore: false, notifiedEnd: false};
+      periodos.push(nuevo);
+      localStorage.setItem("periodos", JSON.stringify(periodos));
+      renderLista();
+      renderCalendario();
+      e.target.reset();
+    });
+
+    if ("Notification" in window && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").then(() => {
+        Notification.requestPermission().then(permission => {
+          console.log("Permiso de notificaciones:", permission);
+        });
+      });
+    }
+
+    setInterval(actualizarReloj, 1000);
+    renderLista();
+    renderCalendario();
+  </script>
+</body>
+</html>
